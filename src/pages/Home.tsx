@@ -40,18 +40,34 @@ const Home = () => {
     const fetchLatestPosts = async () => {
       setLoadingTicker(true);
       try {
-        const modules = import.meta.glob('/src/posts/*.md');
+        // Get module resolvers for URLs, use 'any' for type
+        const modules: Record<string, any> = import.meta.glob('/src/posts/*.md');
         const postPromises = Object.keys(modules).map(async (path) => {
           const slug = path.replace('/src/posts/', '').replace('.md', '');
           try {
-            const response = await fetch(path);
-            if (!response.ok) return null;
+            // Use the resolver function implicitly defined by import.meta.glob
+            const resolver = modules[path]; 
+            const module = await resolver();
+            const builtUrl = module.default;
+            
+            const response = await fetch(builtUrl);
+            if (!response.ok) return null; // Skip failed fetches
             const rawContent = await response.text();
             const { data } = matter(rawContent);
+            
             if (!data.title || !data.date || !data.excerpt) return null;
-            return { slug, ...(data as Partial<PostMetadata>) } as PostMetadata;
-          } catch {
-            return null;
+            return { 
+              slug, 
+              title: data.title, 
+              date: data.date, 
+              excerpt: data.excerpt,
+              // Ensure all fields from PostMetadata are present or defaulted
+              author: data.author || 'Unknown',
+              imageUrl: data.imageUrl || '',
+            } as PostMetadata;
+          } catch(e) {
+            console.error(`Failed processing ticker post ${path}: ${e}`);
+            return null; // Skip posts that fail to parse
           }
         });
 

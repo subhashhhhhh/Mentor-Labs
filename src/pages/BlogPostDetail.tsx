@@ -30,13 +30,26 @@ const BlogPostDetail = () => {
       setLoading(true);
       setError(null);
       try {
+        // Find the correct module using the postId (slug)
+        const modules: Record<string, any> = import.meta.glob('/src/posts/*.md');
         const postPath = `/src/posts/${postId}.md`;
-        const response = await fetch(postPath);
+        const resolver = modules[postPath];
+
+        if (!resolver) {
+           throw new Error(`Post module not found for slug: ${postId}`);
+        }
+
+        // Resolve the module to get the final URL
+        const module = await resolver();
+        const builtUrl = module.default;
+        
+        // Fetch the content from the built URL
+        const response = await fetch(builtUrl);
         if (!response.ok) {
           if (response.status === 404) {
-             throw new Error('Post not found (404)');
+             throw new Error(`Post content not found at ${builtUrl} (404)`);
           } else {
-             throw new Error(`Could not fetch post: ${response.statusText}`);
+             throw new Error(`Could not fetch post content from ${builtUrl}: ${response.statusText}`);
           }
         }
         const rawContent = await response.text();

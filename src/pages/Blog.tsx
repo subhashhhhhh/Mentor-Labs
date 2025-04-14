@@ -22,21 +22,25 @@ const Blog = () => {
       setLoading(true);
       setError(null);
       try {
-        // Use standard import.meta.glob to get module paths
-        const modules = import.meta.glob('/src/posts/*.md');
-        
-        const postPromises = Object.keys(modules).map(async (path) => {
+        // Get module resolvers that resolve to the final asset URL
+        const modules: Record<string, any> = 
+            import.meta.glob('/src/posts/*.md'); 
+            
+        const postPromises = Object.entries(modules).map(async ([path, resolver]) => {
           const slug = path.replace('/src/posts/', '').replace('.md', '');
           try {
-            // Fetch the raw content directly using the path
-            const response = await fetch(path);
+            // Resolve the module to get the final URL
+            const module = await resolver();
+            const builtUrl = module.default; 
+
+            // Fetch the content from the built URL
+            const response = await fetch(builtUrl);
             if (!response.ok) {
-              throw new Error(`Failed to fetch ${path}: ${response.statusText}`);
+              throw new Error(`Failed to fetch ${builtUrl}: ${response.statusText}`);
             }
             const rawContent = await response.text();
             const { data } = matter(rawContent);
             
-            // Basic validation
             if (!data.title || !data.date || !data.author || !data.excerpt || !data.imageUrl) {
                 console.warn(`Incomplete frontmatter for post: ${slug}`, data);
             }
@@ -52,14 +56,13 @@ const Blog = () => {
             } as PostMetadata;
           } catch (postError) {
               console.error(`Error processing post ${path}:`, postError);
-              return null; // Return null for posts that failed to process
+              return null; 
           }
         });
 
         const fetchedPosts = (await Promise.all(postPromises))
-            .filter(p => p !== null) as PostMetadata[]; // Filter out nulls
+            .filter(p => p !== null) as PostMetadata[];
 
-        // Sort posts by date (descending)
         fetchedPosts.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         setPosts(fetchedPosts);
       } catch (err) {
@@ -81,7 +84,7 @@ const Blog = () => {
       return <div className="container mx-auto px-4 py-12 text-center text-red-600">Error loading posts: {error}</div>;
   }
 
-  if (posts.length === 0 && !loading) { // Check loading state too
+  if (posts.length === 0 && !loading) {
       return <div className="container mx-auto px-4 py-12 text-center text-gray-600">No blog posts found.</div>;
   }
 
